@@ -26,6 +26,9 @@ class Collection implements \ArrayAccess, \Countable, \IteratorAggregate
 
     public function set(mixed $key, mixed $value): static
     {
+        if ($key === null) {
+            return $this->add($value);
+        }
         $this->items[$key] = $value;
         return $this;
     }

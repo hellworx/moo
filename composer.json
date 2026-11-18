@@ -1,6 +1,6 @@
 {
     "name": "hellworx/moo",
-    "description": "Moo is a PHP worst micro framework",
+    "description": "Moo is a small, dependency free PHP front controller",
     "type": "library",
     "homepage": "https://github.com/hellworx/moo",
     "license": "MIT",
@@ -17,7 +17,7 @@
         "issues": "https://github.com/hellworx/moo/issues"
     },
     "require": {
-        "php": ">=8.0"
+        "php": ">=8.0 <9.0"
     },
     "require-dev": {
         "phpunit/phpunit": "^10.5 || ^11.5"

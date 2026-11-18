@@ -1,6 +1,6 @@
 <?php
 
-require dirname(__FILE__) . '/../../vendor/autoload.php';
+require __DIR__ . '/../../vendor/autoload.php';
 
 use Moo\Moo;
 

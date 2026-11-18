@@ -10,10 +10,10 @@ ecosystem, use Symfony or Laravel; Moo deliberately has none.
 
 ## Requirements
 
-- PHP 8.0 or newer (the code is written to run on 8.0 through 8.5)
+- PHP 8.0 or newer, below 9.0 (the code is written to run on 8.0 through 8.5)
 - No runtime dependencies
 
-Development tooling (PHPUnit 10.5) requires PHP 8.1 or newer.
+Development tooling (PHPUnit 10.5, or 11.5 on PHP 8.2+) requires PHP 8.1 or newer.
 
 ## Installation
 
@@ -39,7 +39,7 @@ $moo();
 
 ## Usage
 
-This is the sample Moo app with more features presented like state container, plugins and parametrized routing.
+This sample shows state, plugins and parametrized routing.
 
 ~~~php
 <?php
@@ -121,7 +121,7 @@ renderer internals.
 
 ## Classy Moo
 
-Some may need a to write a posh code, if you need style you may try the following.
+Some may prefer a class-based style; if you like that, try the following.
 
 ~~~php
 <?php
@@ -202,10 +202,16 @@ $moo();
 
 Only the outermost dispatch flushes, so the output from nested apps is sent once.
 
+Nested apps receive the outer `Request` and `Response`, so an error inside the
+inner app is reflected in the shared response. Each level runs its own lifecycle,
+including `after`: run serialization on only one level, otherwise the body is
+encoded twice. Nest through `route()` (or pass the response explicitly); calling a
+nested app without the outer response discards its output.
+
 ## Examples
 
 There are some examples in the `examples` directory.
-To run them you can use builtin PHP server.
+To run them you can use the built-in PHP server.
 
 ~~~
 php -S 0.0.0.0:8080 examples/hello-world/index.php
@@ -220,10 +226,13 @@ The goal of Moo is simplicity, flexibility and ease of use.
 Moo is written in PHP and is closure based. From design perspective it is a front controller, the `Moo\Moo` class exposes a set of standard HTTP methods to bind routing handlers as closures. Additionally, Moo acts as a state container and can be extended with plugins.
 
 All Moo components reside in the PSR-4 `Moo` namespace. The main component is the
-`Moo\Moo` class. There are four models: `Moo\Request`, `Moo\Response`, `Moo\Route`
-and the `Moo\Router` that works as dispatcher.
+`Moo\Moo` class. There are three models (`Moo\Request`, `Moo\Response`,
+`Moo\Route`), the `Moo\Router` dispatcher, and the supporting `Moo\Model`,
+`Moo\Collection`, `Moo\Template` and `Moo\StatusCode` classes.
 
-Moo does output buffering, so you can simply output with echo or return a serializable value in the closure.
+Moo does output buffering, so you can echo or return a value from a handler. A
+returned value becomes the response body; Moo never serializes it automatically,
+so encode arrays and objects in the `after` hook.
 
 `Moo\Model` and `Moo\Collection` provide the small amount of data plumbing Moo
 needs, so the library stays dependency free.
@@ -244,7 +253,9 @@ flowchart TD
 ```
 
 The response body is whatever the handler returned. Output produced with `echo`
-is buffered and appended to the body after the `after` hook ran.
+is buffered and appended to the body after the `after` hook ran. When nothing was
+echoed, the returned value is preserved as-is; when output exists, the body must
+be stringable. This is why arrays and objects should be serialized in `after`.
 
 ### Routing
 
@@ -264,9 +275,13 @@ You can match multiple methods using `$moo->route(...)`.
 Routes are matched from the first to the last. If no route matches the request, the error handler is called `$moo->error(...)`.
 Registering the same method and URI twice replaces the earlier route.
 
-Route URIs are regular expressions, so characters with a special meaning in a
-pattern have to be escaped. Invalid patterns are rejected when the route is
-registered.
+If the path matches but the method does not, the response is `405 Method Not
+Allowed` with an `Allow` header listing the registered methods.
+
+The request path is URL-decoded before matching, so `/a%20b` matches `/a b` and
+`%2F` behaves like a path separator. Route URIs are regular expressions, so
+characters with a special meaning in a pattern have to be escaped. Invalid
+patterns are rejected when the route is registered.
 
 ### Parameters
 
@@ -296,21 +311,22 @@ $moo();
 
 ### Error Handling
 
-By default exceptions and errors are handled by the error handler, that also works when no route matches request.
+By default exceptions and errors are handled by the error handler, which also handles the case when no route matches the request.
 
 ~~~php
 $moo->error = function (\Throwable $exc) use ($moo) {
-    $moo->response = new Response([
-        'code' => $exc->getCode() > 0 ? $exc->getCode() : 500,
-        'message' => StatusCode::message($exc->getCode()),
-        'body' => $exc->getMessage()
-    ]);
+    $moo->response->setCode(StatusCode::normalize($exc->getCode()));
+    $moo->response->body = $exc->getMessage();
 };
 ~~~
 
-The handler receives a `\Throwable`. If the exception code is not a valid HTTP
-status code (400 to 599), `500` is used. The `after` hook is not executed when
-the error handler runs.
+The handler receives a `\Throwable`. `StatusCode::normalize()` maps anything
+outside the HTTP error range (400 to 599), including non-integer exception codes,
+to `500`. The `after` hook is not executed when the error handler runs.
+
+The default handler clears response headers, but keeps `Allow` for `405`
+responses. It also puts the exception message in the response body; override the
+handler in production when messages can leak paths, SQL or credentials.
 
 ### Request
 
@@ -322,9 +338,15 @@ The `Moo\Request` class consists of:
 - query
 - post
 - files
+- server
 - body
 
 Request object `$moo->request` is created before `before` with the values taken from PHP global variables, `$_SERVER`, `$_GET`, `$_POST`, `$_FILES`.
+
+`headers` contains normalized HTTP headers: `HTTP_X_TEST` becomes `X-Test`,
+`CONTENT_TYPE` becomes `Content-Type`, and `REDIRECT_HTTP_AUTHORIZATION` becomes
+`Authorization`. The raw server array is available as `server`. Use
+`$moo->request->header('Content-Type')` for a case-insensitive lookup.
 
 *Request body is empty by default!*
 You can override that in the `before` hook:
@@ -336,7 +358,9 @@ $moo->before = function () use ($moo) {
 ~~~
 
 `baseUri` is the directory the front controller script runs in, extracted from
-the script name. It is `/` when it cannot be determined.
+the script name. It is `/` when it cannot be determined. A request for the base
+URI itself, for example `/app` when the script lives in `/app/`, is normalized to
+`/`.
 
 ### Response
 
@@ -347,6 +371,11 @@ The `Moo\Response` class consists of:
 - message
 
 Response object `$moo->response` is created before `before` and can be modified during the request lifecycle. Response body is not serialized, it is assumed you serialize it before `flush` in `after`.
+
+Use `$response->setCode(404)` to keep `code` and `message` in sync. Assigning
+`$response->code` directly does not update `message`, so prefer the setter. The
+default flush sends only `code` via `http_response_code()`; `message` is useful
+for custom flush handlers and `toArray()`.
 
 ### State
 
@@ -378,7 +407,7 @@ Calling an undefined plugin throws `BadMethodCallException`.
 ### Collection
 
 `Moo\Collection` is a small key/value container used for headers, query, post,
-files and routes.
+files, server variables and routes.
 
 ~~~php
 $headers = new Moo\Collection(['Accept' => 'text/html']);
@@ -399,7 +428,9 @@ $headers['Accept']; // ArrayAccess
 ~~~
 
 `get()` returns the given default when the key does not exist, `has()` reports
-presence (a `null` value is still present).
+presence (a `null` value is still present). `set(null, $value)` appends, matching
+`$collection[] = $value`. Use `set()` for nested values; assigning through
+`$collection['a']['b']` does not modify the stored array.
 
 ### Model
 
@@ -427,13 +458,21 @@ You can override that behaviour by setting custom flush handler.
 
 ~~~php
 $moo->flush = function () use ($moo) {
-    header('HTTP/1.1 ' . $moo->response->code . ' ' . $moo->response->message);
-    foreach ($moo->response->headers as $name => $value) {
-        header($name.': '.$value, true);
+    if (!headers_sent()) {
+        http_response_code($moo->response->code);
+        foreach ($moo->response->headers as $name => $value) {
+            header($name.': '.$value, true);
+        }
     }
-    echo $moo->response->body;
+    if ($moo->request->method !== 'HEAD' && !in_array($moo->response->code, [204, 304], true)) {
+        echo $moo->response->body;
+    }
 };
 ~~~
+
+The default flush uses `http_response_code()` and skips the body for `HEAD`,
+`204` and `304` responses. It also checks `headers_sent()` before sending
+headers.
 
 The flush handler only runs for the outermost dispatch, so nested apps and Moo
 embedded in another output buffered application still return the flush result.
@@ -441,7 +480,7 @@ Setting `$moo->flush = null` disables flushing, which is handy in tests.
 
 ## PHP Compatibility
 
-Moo targets PHP 8.0 and newer and is written to stay clean on 8.1 through 8.5:
+Moo targets PHP 8.0 and newer (below 9.0) and is written to stay clean on 8.1 through 8.5:
 
 - dynamic state and plugins are enabled with `#[\AllowDynamicProperties]`
 - nullable parameters are explicit (`?array $context = null`)
@@ -449,9 +488,20 @@ Moo targets PHP 8.0 and newer and is written to stay clean on 8.1 through 8.5:
 - no `null` array offsets, no `ReflectionProperty::setAccessible()`, no `Serializable`
 - no `strict_types`, so typed handler parameters keep the usual PHP coercion
 
+## Security
+
+- The default error handler puts the exception message in the response body.
+  Override `error` in production when messages can contain paths, SQL or
+  credentials.
+- Templates are native PHP; output is not escaped automatically. Escape
+  untrusted values with `htmlspecialchars()`.
+- `examples/var-dump` is for development only.
+- Route patterns are developer-controlled; do not build them from user input.
+
 ## Testing
 
 Moo is unit tested, just run `make test`. Static check of all PHP files is `make lint`.
+Coverage requires Xdebug.
 
 ## Contributing
 

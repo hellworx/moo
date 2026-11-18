@@ -1,9 +1,8 @@
-<?php 
+<?php
 
-require dirname(__FILE__) . '/BookService.php';
+require __DIR__ . '/BookService.php';
 
 use Moo\Moo;
-use Moo\Response;
 use Moo\StatusCode;
 
 class Application extends Moo
@@ -32,14 +31,14 @@ class Application extends Moo
     public function after()
     {
         $this->response->headers->set('Content-Type', 'application/json');
-        $this->response->body = json_encode($this->response->body);
+        if ($this->response->code !== StatusCode::HTTP_NO_CONTENT) {
+            $this->response->body = json_encode($this->response->body);
+        }
     }
 
     public function error(\Throwable $exc)
     {
-        $this->response = new Response();
-        $this->response->code = $exc->getCode() > 0 ? $exc->getCode() : 500;
-        $this->response->message = StatusCode::message($this->response->code);
+        $this->response->setCode(StatusCode::normalize($exc->getCode()));
         $this->response->headers->set('Content-Type', 'application/json');
         $this->response->body = json_encode(['error' => $exc->getMessage()]);
     }
@@ -56,6 +55,7 @@ class Application extends Moo
 
     public function addBook()
     {
+        $this->response->setCode(StatusCode::HTTP_CREATED);
         return $this->bookService->addBook($this->request->body);
     }
 
@@ -71,6 +71,7 @@ class Application extends Moo
 
     public function removeBook($id)
     {
+        $this->response->setCode(StatusCode::HTTP_NO_CONTENT);
         return $this->bookService->removeBook($id);
     }
 }

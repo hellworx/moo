@@ -18,7 +18,7 @@
         console.log(text);
         const element = document.createElement('div');
         element.classList.add('alert', 'alert-primary');
-        element.innerHTML = `Server replied: ${text}`;
+        element.textContent = 'Server replied: ' + text;
         
         const replies = document.getElementById('replies');
         if (replies) {

@@ -11,6 +11,7 @@ class Request extends Model
     public Collection $query;
     public Collection $post;
     public Collection $files;
+    public Collection $server;
     public mixed $body = null;
 
     public function __construct(?array $data = null)
@@ -22,6 +23,20 @@ class Request extends Model
         $this->query = new Collection();
         $this->post = new Collection();
         $this->files = new Collection();
+        $this->server = new Collection();
         parent::__construct($data);
+    }
+
+    /**
+     * Case insensitive header lookup (HTTP header names are case insensitive).
+     */
+    public function header(string $name): mixed
+    {
+        foreach ($this->headers as $key => $value) {
+            if (strcasecmp((string) $key, $name) === 0) {
+                return $value;
+            }
+        }
+        return null;
     }
 }

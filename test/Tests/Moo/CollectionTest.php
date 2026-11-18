@@ -57,6 +57,15 @@ class CollectionTest extends TestCase
         $this->assertEquals([], $collection->items());
     }
 
+    public function testSetWithNullKeyAppends()
+    {
+        $collection = new Collection(['a' => 1]);
+        $collection->set(null, 2);
+
+        $this->assertSame(2, $collection->get(0));
+        $this->assertCount(2, $collection);
+    }
+
     public function testMagicAccess()
     {
         $collection = new Collection();

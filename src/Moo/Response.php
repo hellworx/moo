@@ -17,4 +17,21 @@ class Response extends Model
         $this->message = StatusCode::message($this->code);
         parent::__construct($data);
     }
+
+    public function populate(array $data): static
+    {
+        $syncMessage = !array_key_exists('message', $data);
+        parent::populate($data);
+        if ($syncMessage) {
+            $this->message = StatusCode::message($this->code);
+        }
+        return $this;
+    }
+
+    public function setCode(int $code): static
+    {
+        $this->code = $code;
+        $this->message = StatusCode::message($code);
+        return $this;
+    }
 }

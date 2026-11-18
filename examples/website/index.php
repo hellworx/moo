@@ -1,6 +1,6 @@
 <?php
 
-require dirname(__FILE__) . '/../../vendor/autoload.php';
+require __DIR__ . '/../../vendor/autoload.php';
 
 use Moo\Moo;
 use Moo\Template;
@@ -51,7 +51,7 @@ $moo->get('/contact', function () use ($moo) {
 
 // Contact form submit handler.
 $moo->post('/contact', function () use ($moo) {
-    return strrev($moo->request->post->message);
+    return strrev((string) $moo->request->post->get('message', ''));
 });
 
 $moo();

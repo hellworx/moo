@@ -1,11 +1,11 @@
 <?php
 
-require dirname(__FILE__) . '/../../vendor/autoload.php';
+require __DIR__ . '/../../vendor/autoload.php';
 
 $moo = new Moo\Moo();
 
 $moo->get('/', function () {
-  echo "Hello world!";
+    echo "Hello world!";
 });
 
 $moo();

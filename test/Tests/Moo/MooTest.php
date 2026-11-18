@@ -7,6 +7,7 @@ use Moo\Moo;
 use Moo\Response;
 use Moo\Request;
 use Moo\Router;
+use Moo\StatusCode;
 use Moo\Template;
 
 function array_exclude(array $excluded, array $source)
@@ -63,7 +64,7 @@ class ClassyMooMock extends Moo
 
     public function test($x)
     {
-        $this->response->code = 202;
+        $this->response->setCode(202);
         return $x;
     }
 }
@@ -250,7 +251,7 @@ class MooTest extends TestCase
         });
         $moo();
         $this->assertRouteFound($moo, ['GET'], ['/'], 'ok');
-        $this->assertRouteNotFound($moo, array_exclude(['GET'], self::METHODS), ['/']);
+        $this->assertMethodNotAllowed($moo, array_exclude(['GET'], self::METHODS), ['/'], 'GET');
     }
 
     public function testHead()
@@ -262,7 +263,7 @@ class MooTest extends TestCase
         });
         $moo();
         $this->assertRouteFound($moo, ['HEAD'], ['/'], 'ok');
-        $this->assertRouteNotFound($moo, array_exclude(['HEAD'], self::METHODS), ['/']);
+        $this->assertMethodNotAllowed($moo, array_exclude(['HEAD'], self::METHODS), ['/'], 'HEAD');
     }
 
     public function testPost()
@@ -274,7 +275,7 @@ class MooTest extends TestCase
         });
         $moo();
         $this->assertRouteFound($moo, ['POST'], ['/'], 'ok');
-        $this->assertRouteNotFound($moo, array_exclude(['POST'], self::METHODS), ['/']);
+        $this->assertMethodNotAllowed($moo, array_exclude(['POST'], self::METHODS), ['/'], 'POST');
     }
 
     public function testPut()
@@ -286,7 +287,7 @@ class MooTest extends TestCase
         });
         $moo();
         $this->assertRouteFound($moo, ['PUT'], ['/'], 'ok');
-        $this->assertRouteNotFound($moo, array_exclude(['PUT'], self::METHODS), ['/']);
+        $this->assertMethodNotAllowed($moo, array_exclude(['PUT'], self::METHODS), ['/'], 'PUT');
     }
 
     public function testDelete()
@@ -298,7 +299,7 @@ class MooTest extends TestCase
         });
         $moo();
         $this->assertRouteFound($moo, ['DELETE'], ['/'], 'ok');
-        $this->assertRouteNotFound($moo, array_exclude(['DELETE'], self::METHODS), ['/']);
+        $this->assertMethodNotAllowed($moo, array_exclude(['DELETE'], self::METHODS), ['/'], 'DELETE');
     }
 
     public function testConnect()
@@ -310,7 +311,7 @@ class MooTest extends TestCase
         });
         $moo();
         $this->assertRouteFound($moo, ['CONNECT'], ['/'], 'ok');
-        $this->assertRouteNotFound($moo, array_exclude(['CONNECT'], self::METHODS), ['/']);
+        $this->assertMethodNotAllowed($moo, array_exclude(['CONNECT'], self::METHODS), ['/'], 'CONNECT');
     }
 
     public function testOptions()
@@ -322,7 +323,7 @@ class MooTest extends TestCase
         });
         $moo();
         $this->assertRouteFound($moo, ['OPTIONS'], ['/'], 'ok');
-        $this->assertRouteNotFound($moo, array_exclude(['OPTIONS'], self::METHODS), ['/']);
+        $this->assertMethodNotAllowed($moo, array_exclude(['OPTIONS'], self::METHODS), ['/'], 'OPTIONS');
     }
 
     public function testTrace()
@@ -334,7 +335,7 @@ class MooTest extends TestCase
         });
         $moo();
         $this->assertRouteFound($moo, ['TRACE'], ['/'], 'ok');
-        $this->assertRouteNotFound($moo, array_exclude(['TRACE'], self::METHODS), ['/']);
+        $this->assertMethodNotAllowed($moo, array_exclude(['TRACE'], self::METHODS), ['/'], 'TRACE');
     }
 
     public function testPatch()
@@ -346,7 +347,7 @@ class MooTest extends TestCase
         });
         $moo();
         $this->assertRouteFound($moo, ['PATCH'], ['/'], 'ok');
-        $this->assertRouteNotFound($moo, array_exclude(['PATCH'], self::METHODS), ['/']);
+        $this->assertMethodNotAllowed($moo, array_exclude(['PATCH'], self::METHODS), ['/'], 'PATCH');
     }
 
     public function testCallableReturnValueOverrideBody()
@@ -657,6 +658,279 @@ class MooTest extends TestCase
         }
     }
 
+    public function testBodyTypesArePreservedWithoutOutput()
+    {
+        $values = [
+            ['a' => 1],
+            new \stdClass(),
+            false,
+            0,
+            1.5,
+        ];
+
+        foreach ($values as $value) {
+            $moo = new Moo();
+            $moo->flush = null;
+            $moo->get('/', function () use ($value) {
+                return $value;
+            });
+
+            $moo(new Request(['uri' => '/']));
+            $this->assertSame($value, $moo->response->body);
+        }
+    }
+
+    public function testBufferedOutputIsAppendedToStringBody()
+    {
+        $moo = new Moo();
+        $moo->flush = null;
+        $moo->get('/', function () {
+            echo 'echoed';
+            return 'returned';
+        });
+
+        $moo(new Request(['uri' => '/']));
+        $this->assertSame('returnedechoed', $moo->response->body);
+    }
+
+    public function testBufferedOutputCannotBeAppendedToNonStringableBody()
+    {
+        $moo = new Moo();
+        $moo->flush = null;
+        $moo->get('/', function () {
+            echo 'echoed';
+            return ['a' => 1];
+        });
+
+        try {
+            $moo(new Request(['uri' => '/']));
+            $this->fail('Expected an UnexpectedValueException');
+        } catch (\UnexpectedValueException $exc) {
+            $this->assertStringContainsString('non-string response body', $exc->getMessage());
+        }
+
+        // A failed dispatch must not poison the shared depth for later requests.
+        $next = new Moo();
+        $next->flush = function () {
+            return 'flushed';
+        };
+        $next->get('/', function () {
+            return 'ok';
+        });
+
+        $this->assertSame('flushed', $next(new Request(['uri' => '/'])));
+    }
+
+    public function testResponseCodeSyncsMessage()
+    {
+        $this->assertSame('Not Found', (new Response(['code' => 404]))->message);
+
+        $response = new Response();
+        $response->populate(['code' => 500]);
+        $this->assertSame('Internal Server Error', $response->message);
+
+        $response->setCode(201);
+        $this->assertSame(201, $response->code);
+        $this->assertSame('Created', $response->message);
+
+        $custom = new Response(['code' => 404, 'message' => 'Missing']);
+        $this->assertSame('Missing', $custom->message);
+    }
+
+    public function testRoutesWithAndWithoutTrailingSlashCoexist()
+    {
+        $moo = new Moo();
+        $moo->flush = null;
+        $moo->get('/foo', function () {
+            return 'no-slash';
+        });
+        $moo->get('/foo/', function () {
+            return 'with-slash';
+        });
+
+        $this->assertEquals(2, $moo->router->routes->count());
+
+        $moo(new Request(['uri' => '/foo']));
+        $this->assertSame('no-slash', $moo->response->body);
+
+        $moo(new Request(['uri' => '/foo/']));
+        $this->assertSame('with-slash', $moo->response->body);
+    }
+
+    public function testMethodNotAllowedIncludesAllowHeader()
+    {
+        $moo = new Moo();
+        $moo->flush = null;
+        $moo->get('/only', function () {
+            return 'get';
+        });
+        $moo->put('/only', function () {
+            return 'put';
+        });
+
+        $moo(new Request(['method' => 'POST', 'uri' => '/only']));
+
+        $this->assertEquals(405, $moo->response->code);
+        $this->assertSame('Method Not Allowed', $moo->response->message);
+        $this->assertSame('Method Not Allowed', $moo->response->body);
+        $this->assertSame('GET, PUT', $moo->response->headers->get('Allow'));
+    }
+
+    public function testUriIsUrlDecoded()
+    {
+        $moo = new Moo();
+        $moo->flush = null;
+        $moo->get('/a b', function () {
+            return 'space';
+        });
+
+        $moo(new Request(['uri' => '/a%20b']));
+        $this->assertSame('space', $moo->response->body);
+    }
+
+    public function testRequestHeadersAreNormalized()
+    {
+        $server = $_SERVER;
+        try {
+            $_SERVER['REQUEST_METHOD'] = 'GET';
+            $_SERVER['REQUEST_URI'] = '/';
+            $_SERVER['HTTP_X_TEST'] = 'yes';
+            $_SERVER['CONTENT_TYPE'] = 'text/plain';
+            $_SERVER['REDIRECT_HTTP_AUTHORIZATION'] = 'Bearer token';
+
+            $request = Router::requestFactory();
+
+            $this->assertSame('yes', $request->headers->get('X-Test'));
+            $this->assertSame('yes', $request->header('x-test'));
+            $this->assertSame('text/plain', $request->headers->get('Content-Type'));
+            $this->assertSame('Bearer token', $request->headers->get('Authorization'));
+            $this->assertSame('yes', $request->server->get('HTTP_X_TEST'));
+            $this->assertNull($request->headers->get('HTTP_X_TEST'));
+        } finally {
+            $_SERVER = $server;
+        }
+    }
+
+    public function testBaseUriWithoutTrailingSlashMapsToRoot()
+    {
+        $server = $_SERVER;
+        try {
+            $_SERVER['SCRIPT_NAME'] = '/app/index.php';
+            $_SERVER['PHP_SELF'] = '/app/index.php';
+            $_SERVER['REQUEST_METHOD'] = 'GET';
+            $_SERVER['REQUEST_URI'] = '/app?x=1';
+
+            $request = Router::requestFactory();
+            $this->assertSame('/app/', $request->baseUri);
+            $this->assertSame('/?x=1', $request->uri);
+        } finally {
+            $_SERVER = $server;
+        }
+    }
+
+    public function testBaseUriHandlesRelativeScriptNames()
+    {
+        $server = $_SERVER;
+        try {
+            $_SERVER['REQUEST_METHOD'] = 'GET';
+            $_SERVER['REQUEST_URI'] = '/';
+
+            $_SERVER['SCRIPT_NAME'] = 'index.php';
+            $this->assertSame('/', Router::requestFactory()->baseUri);
+
+            $_SERVER['SCRIPT_NAME'] = 'app/index.php';
+            $this->assertSame('/app/', Router::requestFactory()->baseUri);
+        } finally {
+            $_SERVER = $server;
+        }
+    }
+
+    public function testNonCallableHookIsReported()
+    {
+        $moo = new Moo();
+        $moo->flush = null;
+        $moo->before = 'not-a-function';
+        $moo->get('/', function () {
+            return 'ok';
+        });
+
+        $moo(new Request(['uri' => '/']));
+        $this->assertEquals(500, $moo->response->code);
+        $this->assertStringContainsString('Hook before is not callable', $moo->response->body);
+    }
+
+    public function testNonCallableFlushThrows()
+    {
+        $moo = new Moo();
+        $moo->flush = 'not-a-function';
+        $moo->get('/', function () {
+            return 'ok';
+        });
+
+        $this->expectException(\InvalidArgumentException::class);
+        $moo(new Request(['uri' => '/']));
+    }
+
+    public function testTemplateDoesNotFollowSymlinksOutsideLookupDir()
+    {
+        $target = tempnam(sys_get_temp_dir(), 'moo');
+        file_put_contents($target, 'outside');
+        $link = __DIR__ . '/templates/link.phtml';
+        @unlink($link);
+        if (!@symlink($target, $link)) {
+            @unlink($target);
+            $this->markTestSkipped('Symlinks are not available');
+        }
+
+        try {
+            $this->expectException(\RuntimeException::class);
+            (new Template(__DIR__ . '/templates'))->render('link.phtml');
+        } finally {
+            @unlink($link);
+            @unlink($target);
+        }
+    }
+
+    public function testStatusCodeNormalize()
+    {
+        $this->assertSame(404, StatusCode::normalize(404));
+        $this->assertSame(500, StatusCode::normalize(StatusCode::HTTP_OK));
+        $this->assertSame(500, StatusCode::normalize('42S02'));
+        $this->assertSame(500, StatusCode::normalize(null));
+    }
+
+    public function testDefaultFlushRejectsNonStringableBody()
+    {
+        $moo = new Moo();
+        $moo->request = new Request(['method' => 'GET']);
+        $moo->response = new Response(['body' => ['a' => 1]]);
+
+        $this->expectException(\UnexpectedValueException::class);
+        call_user_func($moo->flush);
+    }
+
+    public function testDefaultFlushSuppressesHeadAndEmptyBodies()
+    {
+        $moo = new Moo();
+
+        $moo->request = new Request(['method' => 'HEAD']);
+        $moo->response = new Response(['body' => 'hidden']);
+        ob_start();
+        call_user_func($moo->flush);
+        $this->assertSame('', ob_get_clean());
+
+        $moo->request = new Request(['method' => 'GET']);
+        $moo->response = (new Response(['body' => 'hidden']))->setCode(204);
+        ob_start();
+        call_user_func($moo->flush);
+        $this->assertSame('', ob_get_clean());
+
+        $moo->response = new Response(['body' => 'shown']);
+        ob_start();
+        call_user_func($moo->flush);
+        $this->assertSame('shown', ob_get_clean());
+    }
+
     /**
      * Keep this test last because it overrides values of global variables.
      */
@@ -713,6 +987,19 @@ class MooTest extends TestCase
                 $this->assertEquals(404, $moo->response->code);
                 $this->assertEquals('Not Found', $moo->response->message);
                 $this->assertEquals('Not Found', $moo->response->body);
+            }
+        }
+    }
+
+    protected function assertMethodNotAllowed(Moo $moo, array $methods, array $uris, string $allowed)
+    {
+        foreach ($methods as $method) {
+            foreach ($uris as $uri) {
+                $moo(new Request(['method' => $method, 'uri' => $uri]));
+                $this->assertEquals(405, $moo->response->code);
+                $this->assertSame('Method Not Allowed', $moo->response->message);
+                $this->assertSame('Method Not Allowed', $moo->response->body);
+                $this->assertSame($allowed, $moo->response->headers->get('Allow'));
             }
         }
     }

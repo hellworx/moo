@@ -10,6 +10,7 @@ final class StatusCode
     const HTTP_CONTINUE = 100;
     const HTTP_SWITCHING_PROTOCOLS = 101;
     const HTTP_PROCESSING = 102;            // RFC2518
+    const HTTP_EARLY_HINTS = 103;           // RFC8297
     const HTTP_OK = 200;
     const HTTP_CREATED = 201;
     const HTTP_ACCEPTED = 202;
@@ -48,14 +49,17 @@ final class StatusCode
     const HTTP_REQUESTED_RANGE_NOT_SATISFIABLE = 416;
     const HTTP_EXPECTATION_FAILED = 417;
     const HTTP_I_AM_A_TEAPOT = 418;         // RFC2324
+    const HTTP_MISDIRECTED_REQUEST = 421;   // RFC7540
     const HTTP_UNPROCESSABLE_ENTITY = 422;  // RFC4918
     const HTTP_LOCKED = 423;                // RFC4918
     const HTTP_FAILED_DEPENDENCY = 424;     // RFC4918
+    const HTTP_TOO_EARLY = 425;             // RFC8470
     const HTTP_RESERVED_FOR_WEBDAV_ADVANCED_COLLECTIONS_EXPIRED_PROPOSAL = 425;   // RFC2817
     const HTTP_UPGRADE_REQUIRED = 426;      // RFC2817
     const HTTP_PRECONDITION_REQUIRED = 428; // RFC6585
     const HTTP_TOO_MANY_REQUESTS = 429;     // RFC6585
     const HTTP_REQUEST_HEADER_FIELDS_TOO_LARGE = 431;   // RFC6585
+    const HTTP_UNAVAILABLE_FOR_LEGAL_REASONS = 451;     // RFC7725
     const HTTP_INTERNAL_SERVER_ERROR = 500;
     const HTTP_NOT_IMPLEMENTED = 501;
     const HTTP_BAD_GATEWAY = 502;
@@ -72,6 +76,7 @@ final class StatusCode
         100 => 'Continue',
         101 => 'Switching Protocols',
         102 => 'Processing',
+        103 => 'Early Hints',
         200 => 'OK',
         201 => 'Created',
         202 => 'Accepted',
@@ -110,6 +115,7 @@ final class StatusCode
         416 => 'Requested Range Not Satisfiable',
         417 => 'Expectation Failed',
         418 => 'I\'m a teapot',
+        421 => 'Misdirected Request',
         422 => 'Unprocessable Entity',
         423 => 'Locked',
         424 => 'Failed Dependency',
@@ -118,6 +124,7 @@ final class StatusCode
         428 => 'Precondition Required',
         429 => 'Too Many Requests',
         431 => 'Request Header Fields Too Large',
+        451 => 'Unavailable For Legal Reasons',
         500 => 'Internal Server Error',
         501 => 'Not Implemented',
         502 => 'Bad Gateway',
@@ -136,5 +143,14 @@ final class StatusCode
     public static function message(int $statusCode): string
     {
         return isset(self::$_messages[$statusCode]) ? self::$_messages[$statusCode] : 'Unknown';
+    }
+
+    /**
+     * Maps an exception code to a usable HTTP error code. Anything outside the
+     * 4xx/5xx range (including non-integer codes, e.g. PDOException) becomes 500.
+     */
+    public static function normalize(mixed $code): int
+    {
+        return is_int($code) && $code >= 400 && $code <= 599 ? $code : 500;
     }
 }

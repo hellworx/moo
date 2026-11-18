@@ -31,21 +31,36 @@ class Moo extends Extendable
 
         // Default error handler.
         $this->error = function (\Throwable $exc) {
-            $code = $exc->getCode();
-            $code = is_int($code) && $code >= 400 && $code <= 599 ? $code : 500;
-            $this->response->code = $code;
-            $this->response->message = StatusCode::message($code);
+            $code = StatusCode::normalize($exc->getCode());
+
+            // The router sets Allow for 405 responses; keep it across the reset.
+            $allow = $code === StatusCode::HTTP_METHOD_NOT_ALLOWED
+                ? $this->response->headers->get('Allow')
+                : null;
+
+            $this->response->setCode($code);
             $this->response->headers->clear();
+            if ($allow !== null) {
+                $this->response->headers->set('Allow', $allow);
+            }
             $this->response->body = $exc->getMessage();
         };
 
         // Default flush handler.
         $this->flush = function () {
-            header('HTTP/1.1 ' . $this->response->code . ' ' . $this->response->message);
-            foreach ($this->response->headers as $name => $value) {
-                header($name . ': ' . $value, true);
+            if (!headers_sent()) {
+                http_response_code($this->response->code);
+                foreach ($this->response->headers as $name => $value) {
+                    header($name . ': ' . $value, true);
+                }
             }
-            echo $this->response->body;
+            if ($this->request->method !== 'HEAD' && !in_array($this->response->code, [204, 304], true)) {
+                $body = $this->response->body;
+                if ($body !== null && !is_scalar($body) && !$body instanceof \Stringable) {
+                    throw new \UnexpectedValueException('Response body must be a string or stringable');
+                }
+                echo (string) $body;
+            }
         };
     }
 
@@ -114,26 +129,60 @@ class Moo extends Extendable
         $this->request = isset($request) ? $request : $this->router->requestFactory();
         $this->response = isset($response) ? $response : new Response();
 
-        self::$depth++;
         ob_start();
+        self::$depth++;
         try {
-            is_callable($this->before) ? $this->before() : null;
+            $this->invokeHook('before');
 
             $result = $this->router->dispatch($this->request, $this->response);
             if ($result !== null) {
                 $this->response->body = $result;
             }
 
-            is_callable($this->after) ? $this->after() : null;
+            $this->invokeHook('after');
         } catch (\Throwable $exc) {
-            is_callable($this->error) ? $this->error($exc) : throw $exc;
+            if ($this->hasHook('error')) {
+                $this->invokeHook('error', [$exc]);
+            } else {
+                throw $exc;
+            }
         } finally {
             $output = ob_get_clean();
-            $this->response->body = $this->response->body . (is_string($output) ? $output : '');
             self::$depth--;
+
+            // Append buffered output only when there is some, so a handler can
+            // still return non-string values (serialized later in after).
+            if (is_string($output) && $output !== '') {
+                $body = $this->response->body;
+                if ($body !== null && !is_scalar($body) && !$body instanceof \Stringable) {
+                    throw new \UnexpectedValueException('Cannot append buffered output to a non-string response body');
+                }
+                $this->response->body = (string) $body . $output;
+            }
         }
 
-        return self::$depth === 0 && is_callable($this->flush) ? $this->flush() : null;
+        return self::$depth === 0 && $this->hasHook('flush') ? $this->invokeHook('flush') : null;
+    }
+
+    protected function hasHook(string $name): bool
+    {
+        return method_exists($this, $name) || isset($this->{$name});
+    }
+
+    protected function invokeHook(string $name, array $args = []): mixed
+    {
+        if (method_exists($this, $name)) {
+            return $this->{$name}(...$args);
+        }
+
+        if (!isset($this->{$name})) {
+            return null;
+        }
+        $hook = $this->{$name};
+        if (!is_callable($hook)) {
+            throw new \InvalidArgumentException("Hook {$name} is not callable");
+        }
+        return $hook(...$args);
     }
 
     public function __invoke(?Request $request = null, ?Response $response = null): mixed
