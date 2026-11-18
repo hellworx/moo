@@ -1,0 +1,7 @@
+.idea
+*.iml
+*.log
+.phpunit*
+/test/results
+/vendor
+VIBE.md
