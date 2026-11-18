@@ -931,42 +931,46 @@ class MooTest extends TestCase
         $this->assertSame('shown', ob_get_clean());
     }
 
-    /**
-     * Keep this test last because it overrides values of global variables.
-     */
     public function testRequestFactory()
     {
-        global $_SERVER;
-        global $_GET;
-        global $_POST;
-        global $_FILES;
+        $server = $_SERVER;
+        $get = $_GET;
+        $post = $_POST;
+        $files = $_FILES;
 
-        $_SERVER['REQUEST_METHOD'] = 'POST';
-        $_SERVER['REQUEST_URI'] = '/test?xxx=123';
-        $_GET['xxx'] = 123;
-        $_POST['yyy'] = 456;
-        $_FILES['zzz'] = ['name' => 'foo.bar'];
+        try {
+            $_SERVER['REQUEST_METHOD'] = 'POST';
+            $_SERVER['REQUEST_URI'] = '/test?xxx=123';
+            $_GET['xxx'] = 123;
+            $_POST['yyy'] = 456;
+            $_FILES['zzz'] = ['name' => 'foo.bar'];
 
-        $moo = new Moo();
-        $moo->flush = null;
-        $moo->post('/test', function () {
-            return 'test';
-        });
+            $moo = new Moo();
+            $moo->flush = null;
+            $moo->post('/test', function () {
+                return 'test';
+            });
 
-        $request = Router::requestFactory();
-        $this->assertEquals('POST', $request->method);
-        $this->assertEquals('/test?xxx=123', $request->uri);
-        $this->assertEquals(1, $request->query->count());
-        $this->assertEquals(123, $request->query->xxx);
-        $this->assertEquals(1, $request->post->count());
-        $this->assertEquals(456, $request->post->yyy);
-        $this->assertEquals(1, $request->files->count());
-        $this->assertEquals('foo.bar', $request->files->zzz['name']);
+            $request = Router::requestFactory();
+            $this->assertEquals('POST', $request->method);
+            $this->assertEquals('/test?xxx=123', $request->uri);
+            $this->assertEquals(1, $request->query->count());
+            $this->assertEquals(123, $request->query->xxx);
+            $this->assertEquals(1, $request->post->count());
+            $this->assertEquals(456, $request->post->yyy);
+            $this->assertEquals(1, $request->files->count());
+            $this->assertEquals('foo.bar', $request->files->zzz['name']);
 
-        $moo($request);
-        $this->assertEquals(200, $moo->response->code);
-        $this->assertEquals('OK', $moo->response->message);
-        $this->assertEquals('test', $moo->response->body);
+            $moo($request);
+            $this->assertEquals(200, $moo->response->code);
+            $this->assertEquals('OK', $moo->response->message);
+            $this->assertEquals('test', $moo->response->body);
+        } finally {
+            $_SERVER = $server;
+            $_GET = $get;
+            $_POST = $post;
+            $_FILES = $files;
+        }
     }
 
     protected function assertRouteFound(Moo $moo, array $methods, array $uris, string $expected)

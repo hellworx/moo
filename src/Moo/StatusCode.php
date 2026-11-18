@@ -72,7 +72,8 @@ final class StatusCode
     const HTTP_NOT_EXTENDED = 510;          // RFC2774
     const HTTP_NETWORK_AUTHENTICATION_REQUIRED = 511;   // RFC6585
     
-    protected static $_messages = [
+    /** @var array<int, string> */
+    protected static array $_messages = [
         100 => 'Continue',
         101 => 'Switching Protocols',
         102 => 'Processing',

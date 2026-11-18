@@ -169,6 +169,9 @@ class Moo extends Extendable
         return method_exists($this, $name) || isset($this->{$name});
     }
 
+    /**
+     * @param array<int, mixed> $args
+     */
     protected function invokeHook(string $name, array $args = []): mixed
     {
         if (method_exists($this, $name)) {

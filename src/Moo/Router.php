@@ -11,6 +11,10 @@ class Router
         $this->routes = new Collection();
     }
 
+    /**
+     * @param array<int, string> $methods
+     * @param array<int, string> $uris
+     */
     public function register(array $methods, array $uris, ?callable $callback): static
     {
         foreach ($methods as $method) {

@@ -7,6 +7,9 @@ namespace Moo;
  */
 abstract class Model
 {
+    /**
+     * @param array<mixed, mixed>|null $data
+     */
     public function __construct(?array $data = null)
     {
         if (isset($data)) {
@@ -14,6 +17,9 @@ abstract class Model
         }
     }
 
+    /**
+     * @param array<mixed, mixed> $data
+     */
     public function populate(array $data): static
     {
         foreach ($data as $key => $value) {
@@ -29,6 +35,9 @@ abstract class Model
         return $this;
     }
 
+    /**
+     * @return array<mixed, mixed>
+     */
     public function toArray(): array
     {
         $result = [];

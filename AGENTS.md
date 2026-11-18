@@ -42,22 +42,31 @@ Hard constraints:
 | `src/Moo/StatusCode.php` | HTTP status constants, messages and `normalize()` |
 | `test/Tests/Moo/` | PHPUnit suite (MooTest, CollectionTest, ModelTest) |
 | `examples/` | Runnable apps, one directory per feature |
+| `phpstan.neon.dist` | PHPStan level 6 configuration (`src` only) |
+| `.github/workflows/ci.yml` | CI matrix (PHP 8.1-8.5, coverage, PHP 8.0 runtime) |
 
 ## Commands
 
 ~~~sh
-make test                      # PHPUnit with coverage, fails on warnings/deprecations/notices
+make test                      # PHPUnit, no coverage driver required
+make coverage                  # PHPUnit + HTML coverage in test/results (Xdebug)
 make lint                      # php -l over src, test and examples
+make phpstan                   # PHPStan level 6 over src
+make check                     # test + lint + phpstan + composer validate
 php vendor/bin/phpunit --filter testRoute test/Tests/Moo/MooTest.php
 php -S 0.0.0.0:8080 examples/hello-world/index.php
 ~~~
 
 - PHPUnit is a dev dependency (`^10.5 || ^11.5`); use `vendor/bin/phpunit`.
-- Coverage needs Xdebug (`XDEBUG_MODE=coverage` is set in the Makefile).
-- Dev tooling needs PHP 8.1, runtime supports 8.0.
-- Only PHP 8.1 is available locally, so that is the only version actually
-  executed. Compatibility with 8.2-8.5 is maintained by the rules below, not by
-  a test run - keep it that way unless a runner is available.
+- Coverage needs Xdebug (`make coverage`); `make test` does not.
+- Dev tooling needs PHP 8.1, runtime supports PHP 8.0.
+- `.github/workflows/ci.yml` runs PHP 8.1-8.5, coverage on 8.1, and a PHP 8.0
+  runtime/lint/smoke job. Only PHP 8.1 is available locally, so that remains the
+  only version executed locally; the compatibility rules below still apply.
+- `composer.lock` is committed for reproducible development installs; it does not
+  constrain consumers of the library.
+- PHPStan config lives in `phpstan.neon.dist` (level 6, `src` only). Keep it clean
+  when changing source.
 
 ## Lifecycle contract
 

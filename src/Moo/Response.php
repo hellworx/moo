@@ -9,6 +9,9 @@ class Response extends Model
     public int $code;
     public string $message;
 
+    /**
+     * @param array<mixed, mixed>|null $data
+     */
     public function __construct(?array $data = null)
     {
         $this->body = null;
@@ -18,6 +21,9 @@ class Response extends Model
         parent::__construct($data);
     }
 
+    /**
+     * @param array<mixed, mixed> $data
+     */
     public function populate(array $data): static
     {
         $syncMessage = !array_key_exists('message', $data);

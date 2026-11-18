@@ -14,6 +14,9 @@ class Request extends Model
     public Collection $server;
     public mixed $body = null;
 
+    /**
+     * @param array<mixed, mixed>|null $data
+     */
     public function __construct(?array $data = null)
     {
         $this->method = 'GET';

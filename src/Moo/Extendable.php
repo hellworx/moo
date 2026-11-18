@@ -9,9 +9,12 @@ namespace Moo;
 #[\AllowDynamicProperties]
 abstract class Extendable
 {
+    /**
+     * @param array<int, mixed> $args
+     */
     public function __call(string $name, array $args): mixed
     {
-        foreach ($this as $key => $callback) {
+        foreach (get_object_vars($this) as $key => $callback) {
             if ($key === $name) {
                 if (is_callable($callback)) {
                     return call_user_func_array($callback, $args);

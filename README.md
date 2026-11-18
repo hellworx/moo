@@ -500,8 +500,18 @@ Moo targets PHP 8.0 and newer (below 9.0) and is written to stay clean on 8.1 th
 
 ## Testing
 
-Moo is unit tested, just run `make test`. Static check of all PHP files is `make lint`.
-Coverage requires Xdebug.
+Moo is unit tested. Common targets:
+
+~~~sh
+make test       # test suite, no coverage driver required
+make coverage   # tests plus HTML coverage in test/results (requires Xdebug)
+make lint       # php -l over src, test and examples
+make phpstan    # PHPStan level 6 over src
+make check      # test + lint + phpstan + composer validate
+~~~
+
+CI runs the suite on PHP 8.1 through 8.5, a coverage job on 8.1 and a PHP 8.0
+runtime/lint/smoke job.
 
 ## Contributing
 

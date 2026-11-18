@@ -5,14 +5,22 @@ namespace Moo;
 class Template extends Extendable
 {
     protected string $lookupDir;
+
+    /** @var array<string, mixed> */
     protected array $defaultContext;
 
+    /**
+     * @param array<string, mixed> $defaultContext
+     */
     public function __construct(string $lookupDir, array $defaultContext = [])
     {
         $this->lookupDir = $lookupDir;
         $this->defaultContext = $defaultContext;
     }
 
+    /**
+     * @param array<string, mixed>|null $context
+     */
     public function render(string $script, ?array $context = null): string
     {
         $file = $this->resolve($script);
@@ -42,6 +50,9 @@ class Template extends Extendable
         return $file;
     }
 
+    /**
+     * @param array<string, mixed> $__vars
+     */
     protected function evaluate(string $__file, array $__vars): void
     {
         extract($__vars, EXTR_SKIP);

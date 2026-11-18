@@ -4,11 +4,18 @@ namespace Moo;
 
 /**
  * Minimal, dependency free key/value collection.
+ *
+ * @implements \ArrayAccess<mixed, mixed>
+ * @implements \IteratorAggregate<mixed, mixed>
  */
 class Collection implements \ArrayAccess, \Countable, \IteratorAggregate
 {
+    /** @var array<mixed, mixed> */
     protected array $items = [];
 
+    /**
+     * @param array<mixed, mixed>|null $items
+     */
     public function __construct(?array $items = null)
     {
         if (isset($items)) {
@@ -16,6 +23,9 @@ class Collection implements \ArrayAccess, \Countable, \IteratorAggregate
         }
     }
 
+    /**
+     * @param iterable<mixed, mixed> $items
+     */
     public function populate(iterable $items): static
     {
         foreach ($items as $key => $value) {
@@ -61,6 +71,9 @@ class Collection implements \ArrayAccess, \Countable, \IteratorAggregate
         return $this;
     }
 
+    /**
+     * @return array<mixed, mixed>
+     */
     public function items(): array
     {
         return $this->items;
@@ -71,11 +84,17 @@ class Collection implements \ArrayAccess, \Countable, \IteratorAggregate
         return count($this->items);
     }
 
+    /**
+     * @return \Traversable<mixed, mixed>
+     */
     public function getIterator(): \Traversable
     {
         yield from $this->items;
     }
 
+    /**
+     * @return array<mixed, mixed>
+     */
     public function toArray(): array
     {
         $result = [];
