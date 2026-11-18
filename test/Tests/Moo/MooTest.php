@@ -46,7 +46,7 @@ class ClassyMooMock extends Moo
         // Keep it empty.
     }
 
-    public function error(\Exception $exc)
+    public function error(\Throwable $exc)
     {
         $this->state = -1;
         $this->response = new Response([
@@ -494,6 +494,167 @@ class MooTest extends TestCase
         $moo();
         $this->assertEquals(200, $moo->response->code);
         $this->assertStringContainsString('test ok 123', $moo->response->body);
+    }
+
+    public function testTemplateIsConfinedToLookupDir()
+    {
+        $this->expectException(\RuntimeException::class);
+        (new Template(__DIR__ . '/templates'))->render('../MooTest.php');
+    }
+
+    public function testTemplateContextDoesNotOverrideInternals()
+    {
+        $template = new Template(__DIR__ . '/templates');
+        $body = $template->render('context.phtml', [
+            'value' => 'ok',
+            '__file' => '/etc/passwd',
+            '__vars' => ['value' => 'overridden'],
+        ]);
+        $this->assertEquals('ok', $body);
+    }
+
+    public function testTemplateMissingDir()
+    {
+        $this->expectException(\RuntimeException::class);
+        (new Template(__DIR__ . '/does-not-exist'))->render('index.phtml');
+    }
+
+    public function testErrorHandlerReceivesThrowable()
+    {
+        $moo = new Moo();
+        $moo->flush = null;
+        $moo->get('/', function () {
+            throw new \TypeError('boom');
+        });
+        $moo(new Request(['uri' => '/']));
+        $this->assertEquals(500, $moo->response->code);
+        $this->assertEquals('boom', $moo->response->body);
+    }
+
+    public function testErrorCodeIsClampedToHttpStatus()
+    {
+        $moo = new Moo();
+        $moo->flush = null;
+        $moo->get('/notfound', function () {
+            throw new \RuntimeException('nope', 404);
+        });
+        $moo->get('/nothttp', function () {
+            throw new \RuntimeException('nope', 1000);
+        });
+        $moo->get('/nocode', function () {
+            throw new \RuntimeException('nope');
+        });
+
+        $moo(new Request(['uri' => '/notfound']));
+        $this->assertEquals(404, $moo->response->code);
+        $this->assertEquals('Not Found', $moo->response->message);
+
+        $moo(new Request(['uri' => '/nothttp']));
+        $this->assertEquals(500, $moo->response->code);
+        $this->assertEquals('Internal Server Error', $moo->response->message);
+
+        $moo(new Request(['uri' => '/nocode']));
+        $this->assertEquals(500, $moo->response->code);
+    }
+
+    public function testInvalidRoutePattern()
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $moo = new Moo();
+        $moo->get('/foo(#', function () {
+            return 'x';
+        });
+    }
+
+    public function testNestedCollectionPopulation()
+    {
+        $request = new Request([
+            'method' => 'POST',
+            'headers' => ['X-Test' => 'yes'],
+            'query' => ['q' => 1],
+            'unknown' => 'ignored',
+        ]);
+        $this->assertEquals('yes', $request->headers->get('X-Test'));
+        $this->assertEquals(1, $request->query->q);
+        $this->assertEquals(['X-Test' => 'yes'], $request->toArray()['headers']);
+        $this->assertArrayNotHasKey('unknown', $request->toArray());
+    }
+
+    public function testFlushIgnoresExternalOutputBuffers()
+    {
+        $moo = new Moo();
+        $moo->flush = function () use ($moo) {
+            return 'flushed:' . $moo->response->body;
+        };
+        $moo->get('/', function () {
+            return 'body';
+        });
+
+        ob_start();
+        ob_start();
+        try {
+            $result = $moo(new Request(['uri' => '/']));
+        } finally {
+            ob_end_clean();
+            ob_end_clean();
+        }
+        $this->assertEquals('flushed:body', $result);
+    }
+
+    public function testNestedMooFlushesOnlyOnce()
+    {
+        $innerFlushes = 0;
+        $inner = new Moo();
+        $inner->flush = function () use (&$innerFlushes) {
+            $innerFlushes++;
+            return 'inner-flush';
+        };
+        $inner->get('/inner', function () {
+            return 'inner';
+        });
+
+        $outer = new Moo();
+        $outer->flush = function () use ($outer) {
+            return $outer->response->body;
+        };
+        $outer->route('/inner', $inner);
+
+        $this->assertEquals('inner', $outer(new Request(['uri' => '/inner'])));
+        $this->assertEquals(0, $innerFlushes);
+    }
+
+    public function testBaseUriIsExtractedFromScriptName()
+    {
+        $server = $_SERVER;
+        try {
+            $_SERVER['SCRIPT_NAME'] = '/app/index.php';
+            $_SERVER['PHP_SELF'] = '/app/index.php';
+            $_SERVER['REQUEST_METHOD'] = 'GET';
+            $_SERVER['REQUEST_URI'] = '/app/books/1';
+
+            $request = Router::requestFactory();
+            $this->assertEquals('/app/', $request->baseUri);
+            $this->assertEquals('/books/1', $request->uri);
+        } finally {
+            $_SERVER = $server;
+        }
+    }
+
+    public function testBaseUriIgnoresBuiltinServerRouterScript()
+    {
+        $server = $_SERVER;
+        try {
+            $_SERVER['SCRIPT_NAME'] = '/books/1';
+            $_SERVER['PHP_SELF'] = '/books/1';
+            $_SERVER['REQUEST_METHOD'] = 'GET';
+            $_SERVER['REQUEST_URI'] = '/books/1';
+
+            $request = Router::requestFactory();
+            $this->assertEquals('/', $request->baseUri);
+            $this->assertEquals('/books/1', $request->uri);
+        } finally {
+            $_SERVER = $server;
+        }
     }
 
     /**

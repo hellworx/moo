@@ -35,7 +35,7 @@ class Application extends Moo
         $this->response->body = json_encode($this->response->body);
     }
 
-    public function error(\Exception $exc)
+    public function error(\Throwable $exc)
     {
         $this->response = new Response();
         $this->response->code = $exc->getCode() > 0 ? $exc->getCode() : 500;

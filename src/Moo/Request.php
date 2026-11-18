@@ -2,9 +2,6 @@
 
 namespace Moo;
 
-use LosKoderos\Generic\Collection\Collection;
-use LosKoderos\Generic\Model\Model;
-
 class Request extends Model
 {
     public string $method;
@@ -14,9 +11,9 @@ class Request extends Model
     public Collection $query;
     public Collection $post;
     public Collection $files;
-    public $body;
-    
-    public function __construct(mixed $mixed = null)
+    public mixed $body = null;
+
+    public function __construct(?array $data = null)
     {
         $this->method = 'GET';
         $this->uri = '/';
@@ -25,6 +22,6 @@ class Request extends Model
         $this->query = new Collection();
         $this->post = new Collection();
         $this->files = new Collection();
-        parent::__construct($mixed);
+        parent::__construct($data);
     }
 }

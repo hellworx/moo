@@ -6,7 +6,7 @@
     colors="true"
     bootstrap="vendor/autoload.php"
     cacheDirectory=".phpunit.cache">
-  <coverage includeUncoveredFiles="true"/>
+  <coverage/>
   <testsuites>
     <testsuite name="tests">
       <directory suffix="Test.php">test/*</directory>

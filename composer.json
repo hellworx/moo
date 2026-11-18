@@ -1,7 +1,8 @@
 {
-    "name": "loskoderos/moo",
-    "description": "Moo is a PHP micro framework to make life and debugging miserable",
+    "name": "hellworx/moo",
+    "description": "Moo is a PHP worst micro framework",
     "type": "library",
+    "homepage": "https://github.com/hellworx/moo",
     "license": "MIT",
     "authors": [
         {
@@ -11,13 +12,15 @@
         }
     ],
     "support": {
-        "email": "hello@loskoderos.com"
+        "email": "lukasz@cepowski.com",
+        "source": "https://github.com/hellworx/moo",
+        "issues": "https://github.com/hellworx/moo/issues"
     },
     "require": {
-        "loskoderos/generic-php": "dev-master",
         "php": ">=8.0"
     },
     "require-dev": {
+        "phpunit/phpunit": "^10.5 || ^11.5"
     },
     "autoload": {
         "psr-4": {

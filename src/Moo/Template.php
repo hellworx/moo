@@ -13,24 +13,38 @@ class Template extends Extendable
         $this->defaultContext = $defaultContext;
     }
 
-    public function render(string $script, array $context = null): string
+    public function render(string $script, ?array $context = null): string
     {
-        $__path = $this->lookupDir . '/' . $script;
-        if (!file_exists($__path)) {
-            throw new \RuntimeException("Template not found: " . $script);
-        }
+        $file = $this->resolve($script);
+        $vars = isset($context) ? array_merge($this->defaultContext, $context) : $this->defaultContext;
+
+        ob_start();
         try {
-            ob_start();
-            extract($this->defaultContext);
-            extract(is_array($context) ? $context : []);
-            if (false === @include $__path) {
-                throw new \RuntimeException("Broken template: " . $script);
-            }
-                
-        } catch (\Exception $exc) {
+            $this->evaluate($file, $vars);
+        } catch (\Throwable $exc) {
             ob_end_clean();
             throw $exc;
         }
         return ob_get_clean();
+    }
+
+    protected function resolve(string $script): string
+    {
+        $base = realpath($this->lookupDir);
+        if ($base === false) {
+            throw new \RuntimeException('Template directory not found: ' . $this->lookupDir);
+        }
+        $base = rtrim($base, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR;
+        $file = realpath($base . $script);
+        if ($file === false || !str_starts_with($file, $base)) {
+            throw new \RuntimeException('Template not found: ' . $script);
+        }
+        return $file;
+    }
+
+    protected function evaluate(string $__file, array $__vars): void
+    {
+        extract($__vars, EXTR_SKIP);
+        include $__file;
     }
 }
